@@ -13,23 +13,25 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, "Password is required"],
+    required: function () {
+      return this.authProvider === "local";
+    }
   },
   isVerified:{
     type: Boolean,
     default: false
   },
-  // verificationToken:{
-  //   type: String,
-  // },
-  // verificationTokenExpire:{
-  //   type: Date
-  // },
-  // refreshToken: {
-  //   type: String,
-  //   default: null
-  // },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
 
+  authProvider: {
+    type: String,
+    enum: ["local", "google"],
+    default: "local"
+  }
 
 }, { timestamps: true });
 

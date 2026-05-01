@@ -67,3 +67,19 @@ export const logout = async (req, res, next) => {
         next(error);
     }
 }
+
+export const googleAuthController = async (req, res, next) => {
+  try {
+    const { idToken } = req.body;
+
+    const data = await authService.googleLogin(idToken);
+
+    res.status(200).json({
+      success: true,
+      data
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};

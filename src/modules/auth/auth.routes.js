@@ -6,6 +6,7 @@ import LoginDto from "./dto/login.dto.js";
 import { VerifyEmailDto } from "./dto/verify-email.dto.js";
 import { authenticated } from "../../common/middleware/auth.middleware.js";
 
+
 const router = Router()
 
 router.post("/register", validateSchema(RegisterDto), controller.register )
@@ -14,6 +15,7 @@ router.post("/register", validateSchema(RegisterDto), controller.register )
 router.post("/verify-email", validateSchema(VerifyEmailDto), controller.verify)
 
 router.post("/login", validateSchema(LoginDto), controller.login)
+router.post("/google", controller.googleAuthController);
 
 router.get("/getMe", authenticated, controller.getMe)
 

@@ -4,73 +4,524 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Million Checkboxes - Authenticated</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --surface: #1e1e1e;
+            --primary: #bb86fc;
+            --text: #e0e0e0;
+            --error: #cf6679;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            background: var(--surface);
+            padding: 2rem;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            margin-bottom: 2rem;
+        }
+
+        h2 {
+            margin-top: 0;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #2d2d2d;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--primary);
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .toggle-link {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: var(--primary);
+            cursor: pointer;
+        }
+
+        .error-msg {
+            color: var(--error);
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+
+        .success-msg {
+            color: #03dac6;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+
+        /* Checkbox Grid Styles */
+        #app-view {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        #logout-btn {
+            width: auto;
+            background: var(--error);
+            color: white;
+            margin-top: 0;
+        }
+
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 10px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.75rem;
+        }
+
+        .checkbox-item input {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        /* View Management */
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+    </style>
 </head>
 
 <body>
 
-    <div id="container"></div>
+    <!-- AUTHENTICATION VIEWS -->
+    <div id="auth-view" class="container view active">
+        <h2 id="auth-title">Login</h2>
 
-    <script src="/socket.io/socket.io.js"></script>
+        <form id="auth-form">
+            <div class="form-group" id="username-group" style="display: none;">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="john_doe">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="email" required placeholder="john@example.com">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="password" required placeholder="StrongPass1!">
+            </div>
+            <button type="submit" id="auth-btn">Login</button>
+        </form>
 
+        <div style="text-align:center; margin-top: 1rem;">OR</div>
+
+        <div id="google-btn" style="margin-top: 1rem; display:flex; justify-content:center;"></div>
+
+        <div id="auth-msg" class="error-msg"></div>
+        <div class="toggle-link" id="toggle-auth">Need an account? Register here</div>
+    </div>
+
+    <!-- EMAIL VERIFICATION VIEW -->
+    <div id="verify-view" class="container view">
+        <h2>Verify Email</h2>
+        <p style="font-size: 0.9rem; text-align: center; color: #aaa;">Enter the token sent to your email or terminal
+        </p>
+        <form id="verify-form">
+            <div class="form-group">
+                <label>Verification Token</label>
+                <input type="text" id="verify-token" required>
+            </div>
+            <button type="submit">Verify</button>
+        </form>
+        <div id="verify-msg" class="error-msg"></div>
+        <div class="toggle-link" onclick="switchView('auth-view')">Back to Login</div>
+    </div>
+
+    <!-- MAIN APP VIEW -->
+    <div id="app-view" class="view">
+        <div class="header">
+            <h2>The Checkboxes</h2>
+            <button id="logout-btn">Logout</button>
+        </div>
+        <div id="checkbox-container" class="checkbox-grid"></div>
+    </div>
+
+    <!-- Load Socket.io from CDN to handle dynamic port execution -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
+        // Use relative path or dynamic origin so it works on 3000, 5000, 8000, etc.
+        const API_BASE = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+            ? window.location.origin
+            : 'http://localhost:5000'; // Fallback if opened as raw file
 
-        const socket = io();
+        let isLoginMode = true;
+        let socket = null;
 
-        window.onload = () => {
-            fetch("/checkbox")
-                .then(response => response.json())
-                .then(data => {
-                    const container = document.getElementById("container");
-                    
-                    data.forEach((state, index) => {
-                        const checkboxElement = document.createElement("input");
-                        checkboxElement.type = "checkbox";
-                        checkboxElement.dataset.index = index;
-                        checkboxElement.checked = state;
+        // DOM Elements
+        const authView = document.getElementById('auth-view');
+        const verifyView = document.getElementById('verify-view');
+        const appView = document.getElementById('app-view');
+        const authForm = document.getElementById('auth-form');
+        const toggleAuth = document.getElementById('toggle-auth');
+        const authTitle = document.getElementById('auth-title');
+        const usernameGroup = document.getElementById('username-group');
+        const authBtn = document.getElementById('auth-btn');
+        const authMsg = document.getElementById('auth-msg');
 
-                        const label = document.createElement("label");
-                        label.textContent = `Checkbox ${index + 1}`;
-
-                        const div = document.createElement("div");
-                        div.appendChild(checkboxElement);
-                        div.appendChild(label);
-
-                        container.appendChild(div);
-
-                    
-                    });
-                })
-                .catch(error => console.error("Error fetching checkboxes:", error));
-        
+        // --- UTILS ---
+        function switchView(viewId) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            authMsg.textContent = '';
+            document.getElementById('verify-msg').textContent = '';
         }
 
-        const container = document.getElementById("container");
+        function initGoogleAuth() {
+            google.accounts.id.initialize({
+                client_id: "625272790810-75us8mebhl5cvt81m4rg147o9skigllb.apps.googleusercontent.com",
+                callback: handleGoogleLogin
+            });
 
-        container.addEventListener("change", (event) => {
-            if (event.target.type === "checkbox") {
-                const index = event.target.dataset.index;
-                const state = event.target.checked;
+            google.accounts.id.renderButton(
+                document.getElementById("google-btn"),
+                {
+                    theme: "outline",
+                    size: "large",
+                    width: 300
+                }
+            );
+        }
 
-                socket.emit("toggleCheckbox", { index, state });
-                
+        // --- THE CUSTOM FETCH INTERCEPTOR ---
+        // This automatically attaches the JWT and handles the Refresh Token flow
+        async function fetchWithAuth(endpoint, options = {}) {
+            let token = localStorage.getItem('accessToken');
+
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            let response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+
+            // If unauthorized, attempt to refresh token
+            if (response.status === 401) {
+                const refreshToken = localStorage.getItem('refreshToken');
+                if (refreshToken) {
+                    try {
+                        const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ refreshToken })
+                        });
+
+                        if (refreshRes.ok) {
+                            const data = await refreshRes.json();
+                            // Save new tokens
+                            localStorage.setItem('accessToken', data.data.accessToken);
+                            localStorage.setItem('refreshToken', data.data.refreshToken);
+
+                            // Retry original request with new token
+                            headers['Authorization'] = `Bearer ${data.data.accessToken}`;
+                            response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+                        } else {
+                            handleLogout(); // Refresh failed, force logout
+                        }
+                    } catch (e) {
+                        handleLogout();
+                    }
+                } else {
+                    handleLogout();
+                }
+            }
+            return response;
+        }
+
+        // --- AUTHENTICATION LOGIC ---
+        toggleAuth.addEventListener('click', () => {
+            isLoginMode = !isLoginMode;
+            authTitle.textContent = isLoginMode ? 'Login' : 'Register';
+            authBtn.textContent = isLoginMode ? 'Login' : 'Register';
+            toggleAuth.textContent = isLoginMode ? 'Need an account? Register here' : 'Already have an account? Login';
+            usernameGroup.style.display = isLoginMode ? 'none' : 'block';
+            authMsg.textContent = '';
+        });
+
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            authMsg.className = '';
+            authMsg.textContent = 'Processing...';
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (isLoginMode) {
+                // LOGIN
+                try {
+                    const res = await fetch(`${API_BASE}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+                    const data = await res.json();
+
+                    if (res.ok) {
+                        localStorage.setItem('accessToken', data.data.accessToken);
+                        localStorage.setItem('refreshToken', data.data.refreshToken);
+                        initApp();
+                    } else {
+                        authMsg.className = 'error-msg';
+                        authMsg.textContent = data.error?.message || 'Login failed';
+                    }
+                } catch (err) {
+                    authMsg.className = 'error-msg';
+                    authMsg.textContent = 'Network error';
+                }
+            } else {
+                // REGISTER
+                const username = document.getElementById('username').value;
+                try {
+                    const res = await fetch(`${API_BASE}/auth/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, email, password })
+                    });
+                    const data = await res.json();
+
+                    if (res.ok) {
+                        switchView('verify-view');
+                        document.getElementById('verify-msg').className = 'success-msg';
+                        document.getElementById('verify-msg').textContent = 'Registration successful! Check your console/email for the token.';
+                    } else {
+                        authMsg.className = 'error-msg';
+                        authMsg.textContent = data.error?.message || 'Registration failed';
+                    }
+                } catch (err) {
+                    authMsg.className = 'error-msg';
+                    authMsg.textContent = 'Network error';
+                }
             }
         });
 
-        socket.on("cooldown", (obj) => {
-            alert(obj.message);
-            const checkbox = document.querySelector(`input[type="checkbox"][data-index="${obj.index}"]`);
-            checkbox.checked = !checkbox.checked;
-        });
+        document.getElementById('verify-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = document.getElementById('verify-token').value;
+            const msg = document.getElementById('verify-msg');
+            msg.className = '';
+            msg.textContent = 'Verifying...';
 
-        socket.on("update", ({ index, state }) => {
-            const checkbox = document.querySelector(`input[type="checkbox"][data-index="${index}"]`);
-            if (checkbox) {
-                checkbox.checked = state;
+            try {
+                const res = await fetch(`${API_BASE}/auth/verify-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ verificationToken: token })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    isLoginMode = true;
+                    switchView('auth-view');
+                    authMsg.className = 'success-msg';
+                    authMsg.textContent = 'Email verified! You can now log in.';
+                } else {
+                    msg.className = 'error-msg';
+                    msg.textContent = data.error?.message || 'Verification failed';
+                }
+            } catch (err) {
+                msg.className = 'error-msg';
+                msg.textContent = 'Network error';
             }
         });
 
-       
+        async function handleGoogleLogin(response) {
+            try {
+                const res = await fetch(`${API_BASE}/auth/google`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        idToken: response.credential
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    localStorage.setItem("accessToken", data.data.accessToken);
+                    localStorage.setItem("refreshToken", data.data.refreshToken);
+                    initApp();
+                } else {
+                    document.getElementById("auth-msg").textContent =
+                        data.error?.message || "Google login failed";
+                }
+            } catch (err) {
+                document.getElementById("auth-msg").textContent = "Network error";
+            }
+        }
+
+        async function handleLogout() {
+            const refreshToken = localStorage.getItem('refreshToken');
+            if (refreshToken) {
+                await fetchWithAuth('/auth/logout', {
+                    method: 'POST',
+                    body: JSON.stringify({ refreshToken })
+                });
+            }
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            if (socket) socket.disconnect();
+            switchView('auth-view');
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', handleLogout);
+
+
+        // --- MAIN APP LOGIC (CHECKBOXES & SOCKETS) ---
+        async function initApp() {
+            switchView('app-view');
+            const container = document.getElementById("checkbox-container");
+            container.innerHTML = 'Loading checkboxes...';
+
+            // 1. Fetch protected checkboxes
+            try {
+                const response = await fetchWithAuth("/checkbox");
+                if (!response.ok) throw new Error("Failed to load");
+
+                const data = await response.json();
+                container.innerHTML = ''; // Clear loading text
+
+                // Render Checkboxes
+                data.forEach((state, index) => {
+                    const div = document.createElement("div");
+                    div.className = "checkbox-item";
+                    console.log(`Rendering checkbox #${index + 1} with state: ${state}`);
+                    const checkboxElement = document.createElement("input");
+                    checkboxElement.type = "checkbox";
+                    checkboxElement.dataset.index = index;
+                    checkboxElement.checked = state;
+
+                    const label = document.createElement("label");
+                    label.textContent = `#${index + 1}`;
+
+                    div.appendChild(checkboxElement);
+                    div.appendChild(label);
+                    container.appendChild(div);
+                });
+
+                // 2. Setup Socket Connection
+                setupSockets();
+
+            } catch (err) {
+                container.innerHTML = `<span style="color:var(--error)">Error fetching checkboxes. Please log in again.</span>`;
+                setTimeout(handleLogout, 2000);
+            }
+        }
+
+        function setupSockets() {
+            if (socket) socket.disconnect();
+
+            socket = io(API_BASE);
+
+            const container = document.getElementById("checkbox-container");
+
+            // Remove old listener to prevent duplicates if re-inited
+            const newContainer = container.cloneNode(true);
+            container.parentNode.replaceChild(newContainer, container);
+
+            newContainer.addEventListener("change", (event) => {
+                if (event.target.type === "checkbox") {
+                    const index = event.target.dataset.index;
+                    const state = event.target.checked;
+                    socket.emit("toggleCheckbox", { index, state });
+                }
+            });
+
+            socket.on("cooldown", (obj) => {
+                alert(obj.message);
+                // Revert the checkbox on UI
+                const checkbox = document.querySelector(`input[type="checkbox"][data-index="${obj.index}"]`);
+                if (checkbox) checkbox.checked = !checkbox.checked;
+            });
+
+            socket.on("update", ({ index, state }) => {
+                const checkbox = document.querySelector(`input[type="checkbox"][data-index="${index}"]`);
+                if (checkbox) checkbox.checked = state;
+            });
+        }
+
+        // --- STARTUP CHECK ---
+        window.onload = () => {
+
+            initGoogleAuth();
+
+            if (localStorage.getItem('accessToken')) {
+                // If token exists, try to load the app directly
+                initApp();
+            }
+        };
 
     </script>
 </body>

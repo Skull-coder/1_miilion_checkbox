@@ -10,7 +10,7 @@ import {
 import { sendVerificationEmail } from "../../common/config/mail.js";
 import { redis } from "../../common/utils/redis-connection.js"
 import mongoose from "mongoose";
-
+import { verifyGoogleToken } from "../../common/utils/google.utility.js";
 
 const hashed = async (string) => await bcrypt.hash(string, 10);
 
@@ -92,6 +92,10 @@ export const login = async ({ email, password }) => {
   const user = await User.findOne({ email });
   if (!user) throw ApiError.unauthorized("Invalid details");
 
+  if (user.authProvider === "google") {
+    throw ApiError.unauthorized("Use Google login");
+  }
+
   const isMatch = await bcrypt.compare(password, user.password);
 
   if (!isMatch) {
@@ -105,6 +109,70 @@ export const login = async ({ email, password }) => {
 
   await redis.set(`rt:${hashedRefreshToken}`, user._id.toString(), "EX", 60 * 60 * 24 * 7);
 
+
+  return {
+    username: user.username,
+    email: user.email,
+    accessToken,
+    refreshToken
+  };
+};
+
+export const googleLogin = async (idToken) => {
+  if (!idToken) {
+    throw ApiError.badRequest("Google token missing");
+  }
+
+  const payload = await verifyGoogleToken(idToken);
+
+  const {
+    sub: googleId,
+    email,
+    name,
+    email_verified
+  } = payload;
+
+  if (!email_verified) {
+    throw ApiError.unauthorized("Google email not verified");
+  }
+
+  // 🔍 Find existing user
+  let user = await User.findOne({
+    $or: [
+      { googleId },
+      { email }
+    ]
+  });
+
+  if (!user) {
+    // ✅ CREATE USER
+    user = await User.create({
+      username: name || email.split("@")[0],
+      email,
+      googleId,
+      authProvider: "google",
+      isVerified: true
+    });
+  } else {
+    // 🔗 LINK ACCOUNT (if previously local)
+    if (!user.googleId) {
+      user.googleId = googleId;
+      user.authProvider = "google";
+      user.isVerified = true;
+      await user.save();
+    }
+  }
+
+  // 🎫 Issue tokens (same as your login)
+  const accessToken = generateAccessToken(user);
+  const { rawToken: refreshToken, hashedToken } = generateTokenPair();
+
+  await redis.set(
+    `rt:${hashedToken}`,
+    user._id.toString(),
+    "EX",
+    60 * 60 * 24 * 7
+  );
 
   return {
     username: user.username,
