@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+
+    <div id="container"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+
+        const socket = io();
+
+        window.onload = () => {
+            fetch("/checkbox")
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById("container");
+                    
+                    data.forEach((state, index) => {
+                        const checkboxElement = document.createElement("input");
+                        checkboxElement.type = "checkbox";
+                        checkboxElement.dataset.index = index;
+                        checkboxElement.checked = state;
+
+                        const label = document.createElement("label");
+                        label.textContent = `Checkbox ${index + 1}`;
+
+                        const div = document.createElement("div");
+                        div.appendChild(checkboxElement);
+                        div.appendChild(label);
+
+                        container.appendChild(div);
+
+                    
+                    });
+                })
+                .catch(error => console.error("Error fetching checkboxes:", error));
+        
+        }
+
+        const container = document.getElementById("container");
+
+        container.addEventListener("change", (event) => {
+            if (event.target.type === "checkbox") {
+                const index = event.target.dataset.index;
+                const state = event.target.checked;
+
+                socket.emit("toggleCheckbox", { index, state });
+                
+            }
+        });
+
+        socket.on("cooldown", (obj) => {
+            alert(obj.message);
+            const checkbox = document.querySelector(`input[type="checkbox"][data-index="${obj.index}"]`);
+            checkbox.checked = !checkbox.checked;
+        });
+
+        socket.on("update", ({ index, state }) => {
+            const checkbox = document.querySelector(`input[type="checkbox"][data-index="${index}"]`);
+            if (checkbox) {
+                checkbox.checked = state;
+            }
+        });
+
+       
+
+    </script>
+</body>
+
+</html>
